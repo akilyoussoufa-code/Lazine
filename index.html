@@ -1,0 +1,91 @@
+
+<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Lazine • Assistant IA</title>
+<meta name="theme-color" content="#0e1630">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+:root{--bg:#0b1226;--bg2:#101a3a;--ink:#e7eefc;--muted:#9bb0da}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);
+background:linear-gradient(160deg,var(--bg),var(--bg2))}
+#app{min-height:100%;display:flex;flex-direction:column;padding:12px;max-width:680px;margin:0 auto}
+h1{margin:6px 0 12px 0;font-size:20px}
+.chat{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.msg{display:flex}.you{justify-content:flex-end}
+.bub{max-width:86%;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}
+.you .bub{background:rgba(255,255,255,.12)}
+.row{display:flex;gap:8px;position:sticky;bottom:0;padding-top:8px}
+input,button{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:var(--ink)}
+input{flex:1;border:1px solid rgba(255,255,255,.15);background:transparent}
+button.primary{background:linear-gradient(180deg,#4fb7ff,#2f93dd);color:#06101f;border:0}
+#mic{border-radius:999px}
+#key{margin-left:auto}
+small{color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+.hidden{display:none}
+.card{background:#0f1a38;border:1px solid rgba(255,255,255,.12);padding:16px;border-radius:12px;width:min(92vw,420px)}
+</style>
+</head><body>
+<div id="app">
+  <h1>Lazine <small>assistant IA</small></h1>
+  <div class="chat" id="chat"></div>
+  <div class="row">
+    <input id="txt" placeholder="Parle ou écris ici…">
+    <button id="send" class="primary">Envoyer</button>
+    <button id="mic">🎤</button>
+    <button id="key">Clé API</button>
+  </div>
+</div>
+
+<div id="modal" class="modal hidden">
+  <div class="card">
+    <h3>Ta clé OpenAI</h3>
+    <input id="keyInput" placeholder="sk-..." type="password" style="width:100%">
+    <div class="row" style="padding:0;margin-top:8px">
+      <button id="save" class="primary">Enregistrer</button>
+      <button id="cancel">Annuler</button>
+    </div>
+    <p><small>Stockée uniquement sur ton appareil (localStorage). Usage perso.</small></p>
+  </div>
+</div>
+
+<script>
+if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js'));}
+
+const chat=document.getElementById('chat'), txt=document.getElementById('txt');
+const send=document.getElementById('send'), mic=document.getElementById('mic');
+const modal=document.getElementById('modal'), keyBtn=document.getElementById('key');
+const keyInput=document.getElementById('keyInput'), save=document.getElementById('save'), cancel=document.getElementById('cancel');
+const MEM='lz_mem_v1', KEY='OPENAI_API_KEY_LOCAL';
+const mem=JSON.parse(localStorage.getItem(MEM)||'{"history":[]}');
+function msg(t,who='bot'){const d=document.createElement('div');d.className='msg '+(who==='you'?'you':'bot');const b=document.createElement('div');b.className='bub';b.textContent=t;d.appendChild(b);chat.appendChild(d);chat.scrollTop=chat.scrollHeight;}
+function speakFR(t){try{const u=new SpeechSynthesisUtterance(t);u.lang='fr-FR';u.rate=0.98;const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith('fr'))||null;if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
+function getKey(){return localStorage.getItem(KEY)||''}function setKey(k){localStorage.setItem(KEY,k)}
+function openKey(){keyInput.value=getKey();modal.classList.remove('hidden');keyInput.focus()} function closeKey(){modal.classList.add('hidden')}
+keyBtn.onclick=openKey; cancel.onclick=closeKey; save.onclick=()=>{setKey(keyInput.value.trim()); closeKey(); alert('Clé enregistrée');};
+
+async function ask(text){
+  const k=getKey(); if(!k){openKey(); throw new Error('no key');}
+  const messages=[{role:'system',content:'Tu es Lazine, assistante IA française, douce et réaliste. Réponds en français.'},
+    ...mem.history.slice(-8), {role:'user',content:text}];
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},
+    body:JSON.stringify({model:'gpt-4o-mini',messages,temperature:0.8})
+  });
+  if(!r.ok) throw new Error(await r.text());
+  const data=await r.json(); return data.choices?.[0]?.message?.content||"Je n’ai pas compris.";
+}
+send.onclick=async()=>{
+  const t=(txt.value||'').trim(); if(!t) return; txt.value=''; msg(t,'you'); mem.history.push({role:'user',content:t});
+  msg('…','bot'); const b=chat.lastChild.firstChild;
+  try{ const rep=await ask(t); b.textContent=rep; mem.history.push({role:'assistant',content:rep}); localStorage.setItem(MEM,JSON.stringify(mem)); speakFR(rep); }
+  catch(e){ b.textContent='⚠️ Problème réseau. Vérifie ta clé.';}
+};
+// Speech to text (si supporté)
+let rec=null, recog=false;
+function ensureRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return null; rec=new SR(); rec.lang='fr-FR'; rec.interimResults=true; rec.onresult=(ev)=>{let f=''; for(const r of ev.results){ if(r.isFinal) f+=r[0].transcript;} if(f.trim()){ txt.value=f.trim(); send.click(); }}; rec.onend=()=>{recog=false;}; return rec;}
+mic.onclick=()=>{ if(!rec) ensureRec(); if(!rec){alert('Reco vocale non supportée.'); return;} if(!recog){recog=true; rec.start();} else {rec.stop(); recog=false;}};
+
+window.addEventListener('load',()=>{msg("Salut Akil, prête à te servir."); const i=setInterval(()=>{if(speechSynthesis.getVoices().length){speakFR("Salut Akil, prête à te servir."); clearInterval(i);}},250); setTimeout(()=>clearInterval(i),3000); if(!getKey()) setTimeout(openKey,500);});
+</script>
+</body></html>
