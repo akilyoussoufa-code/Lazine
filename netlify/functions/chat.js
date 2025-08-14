@@ -43,3 +43,14 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: `Server error: ${e.message}` };
   }
 };
+exports.handler = async () => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: "pong", key: process.env.OPENAI_API_KEY ? "OK" : "Missing" })
+  };
+};exports.handler = async () => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: "pong", key: process.env.OPENAI_API_KEY ? "OK" : "Missing" })
+  };
+};
