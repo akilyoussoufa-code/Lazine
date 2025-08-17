@@ -89,3 +89,17 @@ mic.onclick=()=>{ if(!rec) ensureRec(); if(!rec){alert('Reco vocale non support�
 window.addEventListener('load',()=>{msg("Salut Akil, prête à te servir."); const i=setInterval(()=>{if(speechSynthesis.getVoices().length){speakFR("Salut Akil, prête à te servir."); clearInterval(i);}},250); setTimeout(()=>clearInterval(i),3000); if(!getKey()) setTimeout(openKey,500);});
 </script>
 </body></html>
+async function sendMessage(text){
+  const res = await fetch('/.netlify/functions/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      messages: [
+        { role:'system', content:"Tu es Lazine, assistante française, chaleureuse et directe." },
+        { role:'user', content: text }
+      ]
+    })
+  });
+  const data = await res.json();
+  // afficher data.reply
+}
